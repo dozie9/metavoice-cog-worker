@@ -42,3 +42,8 @@ jobs:
         with:
           push: true
           tags: ${{ vars.DOCKERHUB_REPO }}/${{ vars.DOCKERHUB_IMG }}:${{ env.DOCKER_TAG }}
+          build-args: |
+            COG_REPO=camenduru
+            COG_MODEL=metavoice
+            COG_VERSION=713109ece68b60131018e86585221826650aba6d11ffd4e314f50c7598014358
+            
