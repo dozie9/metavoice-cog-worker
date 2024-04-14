@@ -5,12 +5,13 @@ import subprocess
 import json
 import os
 import uuid
+from datetime import datetime
 
 import runpod
 from runpod.serverless.modules.rp_logger import RunPodLogger
 import requests
 from requests.adapters import HTTPAdapter, Retry
-from firebase_admin import credentials, initialize_app, storage
+from firebase_admin import credentials, initialize_app, storage, firestore
 
 LOCAL_URL = "http://127.0.0.1:5000"
 
@@ -21,10 +22,14 @@ cog_session.mount('http://', HTTPAdapter(max_retries=retries))
 logger = RunPodLogger()
 
 SERVICE_CERT = json.loads(os.environ["FIREBASE_KEY"])
+SADTALKER_SERVICE_CERT = json.loads(os.environ["SADTALKER_FIREBASE_KEY"])
 STORAGE_BUCKET = os.environ["STORAGE_BUCKET"]
-cred_obj = credentials.Certificate(SERVICE_CERT)
-initialize_app(cred_obj, {"storageBucket": STORAGE_BUCKET})
 
+cred_obj = credentials.Certificate(SERVICE_CERT)
+sad_cred_obj = credentials.Certificate(SADTALKER_SERVICE_CERT)
+
+default_app = initialize_app(cred_obj, {"storageBucket": STORAGE_BUCKET}, name="ImagineCrafter")
+sad_app = initialize_app(sad_cred_obj, name='sadtalker')
 # ----------------------------- Start API Service ---------------------------- #
 # Call "python -m cog.server.http" in a subprocess to start the API service.
 subprocess.Popen(["python", "-m", "cog.server.http"])
@@ -85,9 +90,33 @@ def to_file(data: str):
     return upload_audio(filename)
 
 
+def to_firestore(file_url, user_id):
+    db = firestore.client(app=sad_app)
+
+    current_utc_time = datetime.utcnow()
+    formatted_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S")
+
+    push_data = {
+        "uploaderId": user_id,
+        # "videoCaption": prompt,
+        "audioUrl": file_url,
+        "timestamp": formatted_time
+    }
+
+    collection_path = "audioList"
+
+    print("*************Starting firestore data push***************")
+    update_time, firestore_push_id = db.collection(collection_path).add(
+        push_data
+    )
+
+    print(update_time, firestore_push_id)
+
+
+
 def upload_audio(filename):
     destination_blob_name = f'metavoice/{filename}'
-    bucket = storage.bucket()
+    bucket = storage.bucket(app=default_app)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(filename)
 
